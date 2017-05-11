@@ -1,0 +1,23 @@
+{
+  "name": "spacetime-etl-city-directories-building-inspector",
+  "version": "0.0.1",
+  "description": "City Directories & Building Inspector addresses",
+  "main": "city-directories-building-inspector.js",
+  "devDependencies": {
+    "spacetime-generate-etl-readme": "~0.0.7",
+    "standard": "^6.0.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/nypl-spacetime/etl-city-directories-building-inspector.git"
+  },
+  "scripts": {
+    "test": "standard",
+    "readme": "spacetime-generate-etl-readme ./ -o README.md"
+  },
+  "author": "Bert Spaan",
+  "license": "MIT",
+  "dependencies": {
+    "highland": "^2.10.5"
+  }
+}
