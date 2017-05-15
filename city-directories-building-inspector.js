@@ -20,7 +20,10 @@ function transform (config, dirs, tools, callback) {
 
   ndjsonStream(addressesNdjson)
     .each((object) => {
-      cache[object.name] = object.id
+      cache[object.name] = {
+        id: object.id,
+        geometry: object.geometry
+      }
     })
     .stopOnError(callback)
     .done(() => {
@@ -28,16 +31,36 @@ function transform (config, dirs, tools, callback) {
 
       ndjsonStream(cityDirectoriesNdjson)
         .map((object) => {
-          const addressId = cache[object.data.address]
-          if (addressId) {
-            return {
-              type: 'relation',
-              'obj': {
-                from: `${cityDirectoriesDataset}/${object.id}`,
-                to: `${addressesDataset}/${addressId}`,
-                type: 'st:in'
+          const address = cache[object.data.address]
+          if (address) {
+            const cityDirectoryObjectId = `${cityDirectoriesDataset}/${object.id}`
+
+            return [
+              {
+                type: 'object',
+                obj: {
+                  id: object.id,
+                  type: 'st:Person',
+                  geometry: address.geometry
+                }
+              },
+              {
+                type: 'relation',
+                obj: {
+                  from: object.id,
+                  to: cityDirectoryObjectId,
+                  type: 'st:sameAs'
+                }
+              },
+              {
+                type: 'relation',
+                'obj': {
+                  from: cityDirectoryObjectId,
+                  to: `${addressesDataset}/${address.id}`,
+                  type: 'st:in'
+                }
               }
-            }
+            ]
           } else {
             return {
               type: 'log',
