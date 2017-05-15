@@ -1,6 +1,6 @@
 {
   "name": "spacetime-etl-city-directories-building-inspector",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "City Directories & Building Inspector addresses",
   "main": "city-directories-building-inspector.js",
   "devDependencies": {
