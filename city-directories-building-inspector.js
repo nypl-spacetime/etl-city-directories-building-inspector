@@ -1,11 +1,14 @@
 const fs = require('fs')
 const path = require('path')
 const H = require('highland')
+const R = require('ramda')
 
-const cityDirectoriesDataset = 'city-directories'
-const addressesDataset = 'building-inspector-nyc-streets'
+const DATASETS = {
+  cityDirectories: 'city-directories',
+  addresses: 'building-inspector-nyc-streets'
+}
 
-function ndjsonStream(filename) {
+function ndjsonStream (filename) {
   return H(fs.createReadStream(filename))
     .split()
     .compact()
@@ -13,13 +16,15 @@ function ndjsonStream(filename) {
 }
 
 function transform (config, dirs, tools, callback) {
-  const cityDirectoriesNdjson = path.join(dirs.getDir(cityDirectoriesDataset, 'transform'), `${cityDirectoriesDataset}.objects.ndjson`)
-  const addressesNdjson = path.join(dirs.getDir(addressesDataset, 'transform'), `${addressesDataset}.objects.ndjson`)
+  const cityDirectoriesNdjson = path.join(dirs.getDir(DATASETS.cityDirectories, 'transform'), `${DATASETS.cityDirectories}.objects.ndjson`)
+  const addressesNdjson = path.join(dirs.getDir(DATASETS.addresses, 'transform'), `${DATASETS.addresses}.objects.ndjson`)
 
   let cache = {}
+  let count = 0
 
   ndjsonStream(addressesNdjson)
     .each((object) => {
+      count += 1
       cache[object.name] = {
         id: object.id,
         geometry: object.geometry
@@ -27,21 +32,51 @@ function transform (config, dirs, tools, callback) {
     })
     .stopOnError(callback)
     .done(() => {
-      console.log(`      Cached all addresses`)
+      console.log(`      Cached ${count} addresses`)
 
       ndjsonStream(cityDirectoriesNdjson)
         .map((object) => {
-          const address = cache[object.data.address]
-          if (address) {
-            const cityDirectoryObjectId = `${cityDirectoriesDataset}/${object.id}`
+          const addresses = object.data.addresses || []
 
-            return [
+          const logs = []
+          const objectsAndRelations = []
+
+          const matchedAddresses = addresses
+            .map((address) => {
+              const matchedAddress = cache[address]
+
+              if (!matchedAddress) {
+                logs.push({
+                  found: false,
+                  id: object.id,
+                  address
+                })
+              }
+
+              return matchedAddress
+            })
+            .filter(R.identity)
+
+          if (matchedAddresses.length) {
+            const cityDirectoryObjectId = `${DATASETS.cityDirectories}/${object.id}`
+
+            let geometry
+            if (matchedAddresses.length === 1) {
+              geometry = matchedAddresses[0].geometry
+            } else {
+              geometry = {
+                type: 'MultiPoint',
+                coordinates: matchedAddresses.map((matchedAddress) => matchedAddress.geometry.coordinates)
+              }
+            }
+
+            objectsAndRelations.push([
               {
                 type: 'object',
                 obj: {
                   id: object.id,
                   type: 'st:Person',
-                  geometry: address.geometry
+                  geometry
                 }
               },
               {
@@ -52,25 +87,24 @@ function transform (config, dirs, tools, callback) {
                   type: 'st:sameAs'
                 }
               },
-              {
+              ...matchedAddresses.map((matchedAddress) => ({
                 type: 'relation',
                 'obj': {
                   from: cityDirectoryObjectId,
-                  to: `${addressesDataset}/${address.id}`,
+                  to: `${DATASETS.addresses}/${matchedAddress.id}`,
                   type: 'st:in'
                 }
-              }
-            ]
-          } else {
-            return {
-              type: 'log',
-              'obj': {
-                found: false,
-                id: object.id,
-                address: object.data.address
-              }
-            }
+              }))
+            ])
           }
+
+          return [
+            ...objectsAndRelations,
+            ...logs.map((log) => ({
+              type: 'log',
+              obj: log
+            }))
+          ]
         })
         .compact()
         .flatten()
